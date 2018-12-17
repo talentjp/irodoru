@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Autocolor tool</title>
+    <link href="/_assets/literallycanvas.css" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+
+    <style type="text/css">
+      .fs-container {
+	      width: 768px;
+        margin: auto;
+        float:left;
+      }
+
+      .literally {
+        width: 100%;
+        height: 100%;
+		    min-height: 80vh;
+        position: relative;
+      }
+
+      .buttons{
+        float:left;
+        width:128px;
+        margin-right:32px;
+      }
+
+      .myCanvas{
+        float:left;
+      }
+
+      .button {
+        display: inline-block;
+        padding: 15px 15px;
+        font-size: 24px;
+        cursor: pointer;
+        text-align: center;
+        text-decoration: none;
+        outline: none;
+        color: #fff;
+        background-color: #4CAF50;
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 9px #999;
+        margin-bottom: 20px;
+      }
+
+      .button:hover {background-color: #3e8e41}
+
+      .button:active {
+        background-color: #3e8e41;
+        box-shadow: 0 5px #666;
+        transform: translateY(4px);
+      }      
+
+      .button-colorize{
+        height: 128px; 
+        width: 128px; 
+        background-image: url("/dist/ColorWheel.png");
+        border: none;
+        outline:none;
+      }  
+
+      .button-colorize:hover {
+        transform: scale(1.1, 1.1);
+      }
+
+    </style>		
+  </head>
+  <body>  	
+    <div class="buttons">
+      <button class="button" onclick="changeImage('hanayo.png')">Image 1</button></br>
+      <button class="button" onclick="changeImage('honoka.png')">Image 2</button></br>
+      <button class="button" onclick="changeImage('kurumi_tokisaki.png')">Image 3</button></br>
+      <button class="button" onclick="changeImage('kotori.png')">Image 4</button></br>
+      <button class="button" onclick="changeImage('goku.png')">Image 5</button></br>
+      <button class="button" onclick="changeImage('pikachu.png')">Image 6</button></br>
+      <button class="button" onclick="changeImage('blacklagoon.png')">Image 7</button></br>
+      <button class="button-colorize" onclick="colorize()" style="background: url(/dist/ColorWheel.png)"></button>
+    </div> 
+    <div class="fs-container">
+      <div id="lc"></div>	  
+    </div>		
+    <canvas id="myCanvas" width="512" height="512"></canvas>
+    <!-- you really ought to include react-dom, but for react 0.14 you don't strictly have to. -->
+    <script src="/_js_libs/react-0.14.3.js"></script>
+    <script src="/_js_libs/literallycanvas.js"></script>
+	<script src="/dist/socket.io.js"></script>
+	
+
+    <script type="text/javascript">
+		const socket = io('http://localhost:8000/colorization');			
+		socket.on('connect', function(){
+		});
+		//On disconnection
+		//socket.on('disconnect', function(){});		
+		//On any event
+		//socket.on('event', function(data){});
+
+    socket.on('coloring', function(data){								
+      var img = new Uint8ClampedArray(data, 0, 1048576);
+      var c = document.getElementById("myCanvas");
+      var ctx = c.getContext("2d");								
+      var idata = ctx.createImageData(512, 512);								
+      // set our buffer as source
+      idata.data.set(img);
+      // update canvas with new data
+      ctx.putImageData(idata, 0, 0);												
+    });	
+	
+	var lc = LC.init(document.getElementById("lc"), {
+	imageURLPrefix: '/_assets/lc-images',
+	toolbarPosition: 'bottom',
+	defaultStrokeWidth: 2,
+	strokeWidths: [1, 2, 3, 5, 30],
+	imageSize:{width:512, height:512}
+	});
+
+    function changeImage(filename){
+      var newImage = new Image()
+      newImage.src = './dist/' + filename;
+      lc.saveShape(LC.createShape('Image', {x: 0, y: 0, image: newImage}));      
+    }
+
+    function colorize(){
+      var canvas = lc.getImage();
+      var context = canvas.getContext('2d');
+      var imgData = context.getImageData(0,0,512,512);
+      var buffer = imgData.data.buffer;
+      socket.emit('image', {image_type:'sketch', buffer:buffer});
+    }
+
+
+    </script>
+  </body>
+</html>
