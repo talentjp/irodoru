@@ -1,3 +1,4 @@
+![tool interface](autocolortool/dist/sample.png)
 # Introduction
 This work is highly inspired by https://paintschainer.preferred.tech/ and http://www.cse.cuhk.edu.hk/~ttwong/papers/colorize/colorize.pdf.  
 The goal is to show how easy it is to train your own coloring network by using Pytorch, OpenCV, and the public Danbooru dataset.
