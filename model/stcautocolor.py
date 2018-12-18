@@ -3,8 +3,8 @@ from PIL import Image
 import cv2
 import numpy as np
 import torch
-from stcgan import *
-from stcutils import *
+from model.stcgan import *
+from model.stcutils import *
 
 class AutoColor:
     def __init__(self, enableCUDA = True):

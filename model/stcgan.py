@@ -1,30 +1,34 @@
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import Adam
-from stcmodels import *
-from stcutils import *
-from unet_model import *
+from model.stcmodels import *
+from model.stcutils import *
+from unet.unet_model import *
 import os
 
 class DraftGAN:
-    def __init__(self, train_path, model_path, enableCUDA = True):
-        self.train_folder = train_path
-        self.model_folder = model_path      
+    def __init__(self, train_path = None, model_path = None, enableCUDA = True):
+        self.train_dataset = None
+        self.train_loader = None
+        self.train_path = train_path
+        self.model_path = model_path      
         self.epoch = 0
         self.train_history = []  #A list of past dictionaries(g loss, d loss...etc.)
         self.cuda_enabled = torch.cuda.is_available() and enableCUDA
         self.G = UNet(4, 3)
-        self.D = Discriminator(batch_size=8)
+        self.D = Discriminator()
         self.MSE = nn.MSELoss()
         self.L1 = nn.L1Loss()
         self.BCE = nn.BCELoss()
         self.G_optimizer = Adam(self.G.parameters(), lr=1e-2, weight_decay=0.0)
         self.D_optimizer = Adam(self.D.parameters(), lr=1e-2, weight_decay=0.0)
-        self.train_dataset = MangaDataset(root_dir=self.train_folder, transform=transforms.Compose([
-                                               transforms.Resize(512),
-                                               transforms.RandomCrop(256)
-                                           ]))                                                
-        self.train_loader = DataLoader(self.train_dataset, batch_size=8, shuffle=True)                                                                                
+        if self.train_path is not None:
+            self.train_dataset = MangaDataset(root_dir=self.train_path, transform=transforms.Compose([
+                                                transforms.Resize(512),
+                                                transforms.RandomCrop(256)
+                                            ]))   
+        if self.train_dataset is not None:                                             
+            self.train_loader = DataLoader(self.train_dataset, batch_size=8, shuffle=True)
         if self.cuda_enabled:
             self.G = self.G.cuda()
             self.D = self.D.cuda()
@@ -32,6 +36,9 @@ class DraftGAN:
             self.BCE = self.BCE.cuda()
                                 
     def train(self, num_epochs):
+        #don't even allow training if there is no data loader
+        if self.train_loader is None:
+            return
         self.G.train()
         self.D.train()
         for self.epoch in range(self.epoch, self.epoch + num_epochs):
@@ -90,7 +97,7 @@ class DraftGAN:
                     avg_batch_G_loss = total_epoch_G_loss / (batch_idx + 1)
                     avg_batch_D_loss = total_epoch_D_loss / (batch_idx + 1)
                     self.train_history.append({'g_loss':avg_batch_G_loss, 'd_loss':avg_batch_D_loss})               
-                    self.saveModels(os.path.join(self.model_folder, 'model_epoch_{:04d}_batch_{:08d}.pt'.format(self.epoch, batch_idx)))
+                    self.saveModels(os.path.join(self.model_path, 'model_epoch_{:04d}_batch_{:08d}.pt'.format(self.epoch, batch_idx)))
         #increment current epoch index
         self.epoch += 1
         
@@ -106,14 +113,15 @@ class DraftGAN:
         pretrained_dict = checkpoint['D_state_dict']
         model_dict = self.D.state_dict()
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}     
-        self.D.load_state_dict(pretrained_dict)     
-        
+        self.D.load_state_dict(pretrained_dict)             
         self.G_optimizer.load_state_dict(checkpoint['G_optimizer_state_dict'])
         self.D_optimizer.load_state_dict(checkpoint['D_optimizer_state_dict'])
         self.epoch = checkpoint['epoch'] + 1
         self.train_history = checkpoint['history']
         
     def saveModels(self, path):
+        if model.model_path is None:
+            return
         checkpoint = {'epoch':self.epoch, 'G_state_dict':self.G.state_dict(), 'D_state_dict':self.D.state_dict(), 
                            'G_optimizer_state_dict':self.G_optimizer.state_dict(), 'D_optimizer_state_dict':self.D_optimizer.state_dict(),
                            'history':self.train_history}
@@ -128,20 +136,24 @@ class DraftGAN:
         return g_losses, d_losses
         
 class RefineGAN:
-    def __init__(self, model_path, draft_path, enableCUDA = True):
-        self.model_folder = model_path
-        self.draft_folder = draft_path  
+    def __init__(self, model_path = None, draft_path = None, enableCUDA = True):
+        self.train_dataset = None
+        self.train_loader = None
+        self.model_path = model_path
+        self.draft_path = draft_path  
         self.epoch = 0
         self.train_history = []  #A list of dictionaries(g loss, d loss...etc.)
         self.cuda_enabled = torch.cuda.is_available() and enableCUDA
         self.G = UNet(7, 3)   #Sketch(1) + Hint(3) + Draft(3)
-        self.D = Discriminator(batch_size=8)
+        self.D = Discriminator()
         self.L1 = nn.L1Loss()
         self.BCE = nn.BCELoss() #Binary Cross Entropy
         self.G_optimizer = Adam(self.G.parameters(), lr=1e-2, weight_decay=0.0)
         self.D_optimizer = Adam(self.D.parameters(), lr=1e-2, weight_decay=0.0)
-        self.train_dataset = DraftDataset(root_dir=self.draft_folder)                                                
-        self.train_loader = DataLoader(self.train_dataset, batch_size=8, shuffle=True)
+        if self.draft_path is not None:
+            self.train_dataset = DraftDataset(root_dir=self.draft_path)                                                
+        if self.train_dataset is not None:
+            self.train_loader = DataLoader(self.train_dataset, batch_size=8, shuffle=True)
         #Enable CUDA if possible
         if self.cuda_enabled:
             self.G = self.G.cuda()
@@ -150,6 +162,8 @@ class RefineGAN:
             self.BCE = self.BCE.cuda()
                                 
     def train(self, num_epochs):
+        if self.train_loader is None:
+            return
         self.G.train()
         self.D.train()
         for self.epoch in range(self.epoch, self.epoch + num_epochs):
@@ -210,7 +224,7 @@ class RefineGAN:
                     avg_batch_G_loss = total_epoch_G_loss / (batch_idx + 1)
                     avg_batch_D_loss = total_epoch_D_loss / (batch_idx + 1)
                     self.train_history.append({'g_loss':avg_batch_G_loss, 'd_loss':avg_batch_D_loss})               
-                    self.saveModels(os.path.join(self.model_folder, 'refinement_model_epoch_{:04d}_batch_{:08d}.pt'.format(self.epoch, batch_idx)))
+                    self.saveModels(os.path.join(self.model_path, 'refinement_model_epoch_{:04d}_batch_{:08d}.pt'.format(self.epoch, batch_idx)))
         #increment current epoch index
         self.epoch += 1
         
@@ -224,6 +238,8 @@ class RefineGAN:
         self.train_history = checkpoint['history']
         
     def saveModels(self, path):
+        if self.model_path is None:
+            return
         checkpoint = {'epoch':self.epoch, 'G_state_dict':self.G.state_dict(), 'D_state_dict':self.D.state_dict(), 
                            'G_optimizer_state_dict':self.G_optimizer.state_dict(), 'D_optimizer_state_dict':self.D_optimizer.state_dict(),
                            'history':self.train_history}

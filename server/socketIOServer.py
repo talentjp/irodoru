@@ -19,13 +19,16 @@ from PIL import Image
 import cv2
 import scipy
 #Project libraries
-from stcutils import *
-from stcmodels import *
-from stcgan import *
-from stcautocolor import *
-from misc import *
+from model.stcutils import *
+from model.stcmodels import *
+from model.stcgan import *
+from model.stcautocolor import *
+from model.misc import *
+
+autoC = AutoColor(enableCUDA=True)
 
 def colorizeImg(img, downsample=False):
+    global autoC
     #Compute the color            
     img_sketch, img_hint = PainterImageToSketchAndHint(img)        
     autoC.loadImages(img_sketch, img_hint, shrinkImages=downsample, edgeDetect=True)
@@ -40,13 +43,7 @@ def colorizeImg(img, downsample=False):
         colored_numpy = cv2.resize(colored_numpy, (512,512) , interpolation=cv2.INTER_CUBIC)            
     return colored_numpy #32-bit RGBA image
 
-
-autoC = AutoColor(enableCUDA=True)
-#Replace this with your model path for deployment
-autoC.loadModels(path_draft='model_epoch_0001_batch_00035999.pt', 
-                 path_refine='refinement_model_epoch_0010_batch_00003999.pt')
-                
-sio = socketio.Server()
+sio = socketio.Server() 
 app = Flask(__name__)
 
 @app.route('/')
@@ -69,9 +66,33 @@ def receiveImage(sid, data):
 def disconnect(sid):
     print('disconnected: ', sid)
 
-if __name__ == '__main__':
+
+def startServer(model_draft, model_refine):    
+    global autoC
+    global app
+    global sio    
+    #Replace this with your model path for deployment
+    autoC.loadModels(path_draft=model_draft, path_refine=model_refine)                    
     # wrap Flask application with engineio's middleware
     app = socketio.Middleware(sio, app)
-
     # deploy as an eventlet WSGI server
-    eventlet.wsgi.server(eventlet.listen(('', 8000)), app)
+    eventlet.wsgi.server(eventlet.listen(('', 8000)), app)    
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='inference service')
+    parser.add_argument('-Md', '--model_draft', 
+                        help='path to draft model')
+    parser.add_argument('-Mr', '--model_refine', 
+                        help='path to refinement model')    
+    results = parser.parse_args(sys.argv[1:])
+    if results.model_draft is None:
+        if not os.path.isfile('default_draft.pt'):
+            print('default draft model does not exist, downloading from Google Drive......')
+            download_file_from_google_drive('1vRJH4hywJI02Ta7e2XQlt7u21jIUMqh_', 'default_draft.pt')
+        results.model_draft = 'default_draft.pt'
+    if results.model_refine is None:
+        if not os.path.isfile('default_refine.pt'):
+            print('default refinement model does not exist, downloading from Google Drive......')
+            download_file_from_google_drive('1jWUdo3k-gbx8N6dj1QiN0EDcCagH7Lhy', 'default_refine.pt')
+        results.model_refine = 'default_refine.pt'
+    startServer(results.model_draft, results.model_refine)
