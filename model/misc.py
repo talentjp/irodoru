@@ -1,11 +1,11 @@
-import os, glob
+import os, glob, warnings
 import numpy as np
 import scipy.ndimage.filters as fi
 import matplotlib.pyplot as plt
 from model.stcutils import *
 import torch
-from scipy.ndimage.morphology import binary_dilation
 import requests
+from PIL import Image
 
 def download_file_from_google_drive(id, destination):
     URL = "https://docs.google.com/uc?export=download"
@@ -129,13 +129,17 @@ def log_progress(sequence, every=None, size=None, name='Items'):
 
 #Delete all non-rgb(e.g. grayscale) images
 def RemoveNonRGBImages(root_folder):
-    for f in glob.glob(os.path.join(root_folder + '**/*.jpg'), recursive=True):
+    root_folder = os.path.join(root_folder, '')
+    for f in glob.glob(os.path.join(root_folder + '**/*.jpg'), recursive=True):    
         shouldDelete = False
-        with Image.open(f) as image:
-            if image.mode != 'RGB':
-                shouldDelete = True
-        if shouldDelete:
-            os.remove(f)
+        with warnings.catch_warnings(record=True) as w:
+            with Image.open(f) as image:
+                if image.mode != 'RGB':
+                    shouldDelete = True
+            if len(w) > 0:
+                shouldDelete = True                        
+            if shouldDelete:
+                os.remove(f)            
                         
 #Plot an item in the dataset
 def PlotData(data, model):

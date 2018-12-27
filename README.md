@@ -17,6 +17,14 @@ The goal is to show how easy it is to train your own coloring network by using P
 4. Use command "pip install flask flask-socketio pillow numpy scipy scikit-learn eventlet" if you miss some of the libraries.
 
 # Preparing the dataset
+The entire training is done over the danbooru 2017 512px dataset, which can be acquired using the torrent files:</br>
+https://www.gwern.net/docs/anime/danbooru2017-sfw512px-torrent.tar.xz</br>
+Once you have the images, make sure to remove all the 8-bit grayscale ones, perhaps with the supplied "python train.py --clean <danbooru path>"
 
 # Training the models
+The workflow is as follows:
+1. Train the draft model with "python train.py --draft [danbooru directory] [model directory]"
+2. Generate the dataset for refinement model with "python train.py --generate [danbooru directory] [draft image directory] --model [draft model]"
+3. Train the refinement model with "python train.py --refine [draft image directory] [model directory]"
+
 # Future work

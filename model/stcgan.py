@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import Adam
+from torchvision import utils
 from model.stcmodels import *
 from model.stcutils import *
 from unet.unet_model import *
@@ -11,7 +12,11 @@ class DraftGAN:
         self.train_dataset = None
         self.train_loader = None
         self.train_path = train_path
-        self.model_path = model_path      
+        self.model_path = model_path
+        if self.train_path is not None:
+            self.train_path = os.path.join(self.train_path, '')
+        if self.model_path is not None:
+            self.model_path = os.path.join(self.model_path, '')            
         self.epoch = 0
         self.train_history = []  #A list of past dictionaries(g loss, d loss...etc.)
         self.cuda_enabled = torch.cuda.is_available() and enableCUDA
@@ -97,10 +102,10 @@ class DraftGAN:
                     avg_batch_G_loss = total_epoch_G_loss / (batch_idx + 1)
                     avg_batch_D_loss = total_epoch_D_loss / (batch_idx + 1)
                     self.train_history.append({'g_loss':avg_batch_G_loss, 'd_loss':avg_batch_D_loss})               
-                    self.saveModels(os.path.join(self.model_path, 'model_epoch_{:04d}_batch_{:08d}.pt'.format(self.epoch, batch_idx)))
-        #increment current epoch index
-        self.epoch += 1
-        
+                    self.saveModels(os.path.join(self.model_path, 'draft_model_epoch_{:04d}_batch_{:08d}.pt'.format(self.epoch, batch_idx)))
+            #Save a model for each epoch
+            self.saveModels(os.path.join(self.model_path, 'draft_model_epoch_{:04d}.pt'.format(self.epoch)))
+                        
     def loadModels(self, path):
         checkpoint = torch.load(path)
         #self.G.load_state_dict(checkpoint['G_state_dict'])
@@ -134,6 +139,23 @@ class DraftGAN:
             g_losses.append(history_item['g_loss'].item())
             d_losses.append(history_item['d_loss'].item())
         return g_losses, d_losses
+
+    def saveDraftImages(self, path):
+        path = os.path.join(path, '')
+        if self.cuda_enabled:
+            self.G = self.G.cuda()
+        self.G.eval()
+        with torch.no_grad():
+            for i in range(len(self.train_dataset)):
+                data = self.train_dataset[i]    
+                #for i, data in enumerate(log_progress(gan_draft.train_dataset)):
+                output = self.G(torch.cat([data['sketch'].unsqueeze(0).cuda(), data['hint'].unsqueeze(0).cuda()], dim=1))
+                output = output.squeeze()
+                #Save the original and the generated version
+                utils.save_image(data['original'], os.path.join(path, '{:08d}_original.png'.format(i)))
+                utils.save_image(data['hint'], os.path.join(path, '{:08d}_hint.png'.format(i)))
+                utils.save_image(data['sketch'], os.path.join(path, '{:08d}_sketch.png'.format(i)))
+                utils.save_image(output, os.path.join(path, '{:08d}_draft.png'.format(i)))         
         
 class RefineGAN:
     def __init__(self, model_path = None, draft_path = None, enableCUDA = True):
@@ -141,6 +163,10 @@ class RefineGAN:
         self.train_loader = None
         self.model_path = model_path
         self.draft_path = draft_path  
+        if self.draft_path is not None:
+            self.draft_path = os.path.join(self.draft_path, '')
+        if self.model_path is not None:
+            self.model_path = os.path.join(self.model_path, '')         
         self.epoch = 0
         self.train_history = []  #A list of dictionaries(g loss, d loss...etc.)
         self.cuda_enabled = torch.cuda.is_available() and enableCUDA
@@ -225,8 +251,9 @@ class RefineGAN:
                     avg_batch_D_loss = total_epoch_D_loss / (batch_idx + 1)
                     self.train_history.append({'g_loss':avg_batch_G_loss, 'd_loss':avg_batch_D_loss})               
                     self.saveModels(os.path.join(self.model_path, 'refinement_model_epoch_{:04d}_batch_{:08d}.pt'.format(self.epoch, batch_idx)))
-        #increment current epoch index
-        self.epoch += 1
+            #Save a model for each epoch
+            print("saving model to " + os.path.join(self.model_path, 'refinement_model_epoch_{:04d}.pt'.format(self.epoch)))
+            self.saveModels(os.path.join(self.model_path, 'refinement_model_epoch_{:04d}.pt'.format(self.epoch)))                    
         
     def loadModels(self, path):
         checkpoint = torch.load(path)
