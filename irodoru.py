@@ -1,7 +1,7 @@
 from server import socketIOServer
 from server import staticServer
 import argparse, sys, os
-from multiprocessing import Process
+from multiprocessing import Process, set_start_method
 from model.misc import *
 from model.stcautocolor import *
 
@@ -23,6 +23,7 @@ if __name__ == "__main__":
             download_file_from_google_drive('1jWUdo3k-gbx8N6dj1QiN0EDcCagH7Lhy', 'default_refine.pt')
         results.model_refine = 'default_refine.pt'
 
+    set_start_method('spawn')
     p1 = Process(target=socketIOServer.startServer, args=(results.model_draft, results.model_refine))
     p2 = Process(target=staticServer.startServer)
     p1.start()
