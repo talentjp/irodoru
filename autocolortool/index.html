@@ -89,8 +89,8 @@
 	<script src="/dist/socket.io.js"></script>
 	
 
-    <script type="text/javascript">
-		const socket = io('http://localhost:8000/colorization');			
+    <script type="text/javascript">		
+		const socket = io('http://' + self.location.hostname + ':8000/colorization');			
 		socket.on('connect', function(){
 		});
 		//On disconnection
